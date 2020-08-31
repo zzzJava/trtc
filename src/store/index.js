@@ -3,7 +3,7 @@ import Vuex from 'vuex'
 import meeting from "./modules/meeting";
 Vue.use(Vuex)
 
-new Vuex.Store({
+export default new Vuex.Store({
   modules: {
     meeting
   }
