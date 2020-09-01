@@ -5,6 +5,7 @@
       <el-button @click.native="startMeeting" id="btn-join">加入房间</el-button>
       <el-button @click.native="stopMeeting" id="btn-leave" style="display: none;">离开房间</el-button>
     </el-row>
+    <slot name="remote"></slot>
   </div>
 </template>
 

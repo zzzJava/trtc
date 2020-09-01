@@ -22,6 +22,9 @@ export default {
     },
     createStream(state) {
       state.localStream = TRTC.createStream({audio: true, video: true})
+    },
+    setUserId(state, userId) {
+      state.loginedUser.userId = userId;
     }
   },
   actions: {

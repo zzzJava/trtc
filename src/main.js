@@ -9,6 +9,7 @@ import ElementUI from 'element-ui'
 import 'element-ui/lib/theme-chalk/index.css'
 import NavMenu from "./components/NavMenu";
 import store from './store'
+import Meet from "./components/Meet";
 
 
 Vue.config.productionTip = false
@@ -19,5 +20,5 @@ new Vue({
   el: '#app',
   router,
   store: store,
-  components: { test, NavMenu }
+  components: { test, NavMenu, Meet }
 })
