@@ -6,7 +6,8 @@ export default {
   state: {
     trtcClient: null,
     loginedUser: {userId: 'zzz'},
-    localStream: null
+    localStream: null,
+    sourceStream: MediaStream
   },
   getters: {
 
@@ -20,14 +21,23 @@ export default {
         sdkAppId: sigInfo.sdkAppId
       })
     },
-    createStream(state) {
-      state.localStream = TRTC.createStream({audio: true, video: true})
-    },
+
     setUserId(state, userId) {
       state.loginedUser.userId = userId;
     }
   },
   actions: {
+    async createStream({state, commit}) {
+        console.log("--------start create stream")
+      let stream = await navigator.mediaDevices.getUserMedia({audio: true, video: { width: 640, height: 480, frameRate: 15 }})
+      state.sourceStream = stream
+        console.log("------------get stream from browser", stream)
+      const audioTrack = stream.getAudioTracks()[0];
+      const videoTrack = stream.getVideoTracks()[0];
+        console.log("------------start create local stream")
+      state.localStream = TRTC.createStream({userId: state.loginedUser.userId, audioSource: audioTrack, videoSource: videoTrack})
+        console.log("------------local stream", state.localStream)
+    },
     async initStream({state, commit}) {
       await state.localStream.initialize()
         .catch( err => {
