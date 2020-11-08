@@ -1,5 +1,6 @@
 import Vuex from 'vuex'
 import TRTC from 'trtc-js-sdk'
+import axios from "axios";
 
 export default {
   namespaced: true,
@@ -50,6 +51,18 @@ export default {
     // 浏览器是否能够使用trtc
     browserSuitable({state, commit}) {
       return TRTC.checkSystemRequirements();
+    },
+    async leaveRoom({state, commit}) {
+      state.trtcClient
+        .leave()
+        .then(() => {
+          // 退房成功，可再次调用client.join重新进房开启新的通话。
+          console.log("退出房间成功")
+        })
+        .catch(error => {
+          console.error('退房失败 ' + error);
+          // 错误不可恢复，需要刷新页面。
+        });
     }
 
   }

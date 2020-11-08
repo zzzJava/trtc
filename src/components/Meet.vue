@@ -5,6 +5,7 @@
       <el-button @click.native="startMeeting" id="btn-join">加入房间</el-button>
       <el-button @click.native="stopMeeting" id="btn-leave" style="display: none;">离开房间</el-button>
       <div id="local_stream" style="width: 640px; height: 480px;"></div>
+      <a href="http://1500001957.vod2.myqcloud.com/6c98241evodcq1500001957/466ace655285890809543120218/playlist_eof.m3u8" download="test">下载</a>
     </el-row>
     <slot name="remote"></slot>
   </div>
@@ -21,7 +22,15 @@
           remoteStream: null,
           isFirst: true,
           buffer: [],
-          recordPeriod: 200 // 录音周期，即多长时间向后端发送一次数据
+          recordPeriod: 500, // 录音周期，即多长时间向后端发送一次数据，时间过短（如200ms），后端经常会误识别出“嗯”“啊”等词语
+          speechStatus : 0, // 0:静默， 1:当前帧不是语音帧,但前一帧是  2:当前帧是语音帧
+          level : -1,
+          frameCount : -1,
+          background : 0,
+          forgetFactor : 1.05,
+          threshold : 5,
+          actualSend: 0,
+          openSilentCheck: true
         }
       },
       computed: {
@@ -29,7 +38,7 @@
           trtcClient: 'trtcClient',
           loginedUser: 'loginedUser',
           sourceStream: 'sourceStream',
-          localStream: 'localStream'
+          localStream: 'localStream',
         }),
         ...mapGetters('meeting', {
         })
@@ -43,7 +52,8 @@
           initStream: 'initStream',
           listenStreamAdded: 'listenStreamAdded',
           browserSuitable: 'browserSuitable',
-          createStream: 'createStream'
+          createStream: 'createStream',
+          leaveRoom: 'leaveRoom'
         }),
 
         // 流程控制
@@ -154,7 +164,9 @@
             if (this.buffer.length > bufferSize) { // 数据个数大于44100（浏览器音频采样频率是44100hz）
               let data = this.buffer.slice(0, bufferSize)
               this.buffer = this.buffer.slice(bufferSize)
+              console.log("length", data.length)
               this.sendData(data);
+
             }
           }
           source.connect(processor)
@@ -164,20 +176,29 @@
           // 转换数据位数为16
           let bit16Data = this.float32ToInt16(buffer)
           let sampleRate = 16000
-          console.log("bit16", bit16Data)
+          // console.log("bit16", bit16Data)
           // 采样为8000hz
           let sample = this.sampleData(bit16Data, 44100, sampleRate)
-          console.log("sample", sample)
+          // console.log("sample", sample)
+          if (this.openSilentCheck) {
+            this.classifyAudioFrame(sample)
+            console.log("帧状态", {idx: this.frameCount, statue: this.speechStatus})
+            if (this.speechStatus < 1) {
+              console.log("节约率", (this.frameCount - this.actualSend)/this.frameCount);
+              return;
+            }
+          }
+          this.actualSend += 1
           // 转为wav格式
           let wavData = this.encodeToWav(sample, sampleRate, this.isFirst)
           if (this.isFirst) {
             this.isFirst = false
           }
-          console.log("blob", wavData)
+          // console.log("blob", wavData)
           // 保存文件
           // saveAsFile(wavData)
           wavData.arrayBuffer().then(data => {
-            console.log("wav", data)
+            // console.log("wav", data)
             this.sendRecordData(new Uint8Array(data));
           })
 
@@ -284,16 +305,64 @@
       },
       sendRecordData(uint8view) {
         let realData = Array.from(uint8view);
-        console.log(realData);
+        let data = JSON.stringify(realData)
+        console.log(realData.length)
         axios({
           headers: {
             'Content-Type': 'application/json'
           },
-          url: "http://localhost:8083/api/asr/add",
+          url: "http://localhost:8083/api/asr/add?userId=" + this.loginedUser.userId,
           method: "post",
-          data: JSON.stringify(realData)
+          data: data,
         });
-      }
+      },
+        classifyAudioFrame(frameData){
+          console.log('level', this.level);
+          console.log('background', this.background);
+
+          let sum = 0;
+          frameData.map( x => sum += x*x )
+          let energy = 10*Math.log(sum);
+          console.log('energy', energy);
+          this.frameCount += 1;
+          if (this.level === -1) {
+            // 第一帧， 初始化level
+            this.level = energy;
+            this.speechStatus = 2;
+            return;
+          } else {
+            this.level = ((this.level + this.forgetFactor) + energy)/(this.forgetFactor + 1);
+          }
+          if (this.frameCount < 9) {
+            this.background += energy;
+            this.speechStatus = 2;
+            return;
+          } else if (this.background === 9) {
+            this.background /= 10; // 取前10帧的平局值
+            this.speechStatus = 2;
+            return;
+          }
+
+          if (energy < this.background) {
+            this.background = energy;
+          } else {
+            this.background += (energy - this.background)*0.05;
+          }
+
+          if (this.level < this.background) {
+            this.level = this.background;
+          }
+
+          console.log('accroding', this.level - this.background)
+          if (this.level - this.background > this.threshold) {
+            this.speechStatus = 2
+          } else if (this.speechStatus == 2) {
+            this.speechStatus = 1;
+          } else {
+            this.speechStatus = 0;
+          }
+        }
+
 
   },
       mounted() {
